@@ -14,11 +14,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type Route struct {
-	Uri      string `json:"uri"`
-	Upstream string `json:"upstream"`
-}
-
 func main() {
 	conninfo := "user=postgres password=postgres host=127.0.0.1 sslmode=disable"
 	db, err := sql.Open("postgres", conninfo)
