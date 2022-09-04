@@ -60,7 +60,7 @@ BEGIN
 	IF (TG_OP = 'INSERT') THEN
 		data = row_to_json(NEW);
 		channel = (select SUBSTRING(NEW.key, '/(.*)/'));
-        PERFORM pg_notify(channel, data::text);
+		PERFORM pg_notify(channel, data::text);
 	END IF;
 	RETURN NULL; -- result is ignored since this is an AFTER trigger
 END;
@@ -68,4 +68,4 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER notify_config_change
 AFTER INSERT ON config
-    FOR EACH ROW EXECUTE FUNCTION notify_config_change();
+	FOR EACH ROW EXECUTE FUNCTION notify_config_change();
