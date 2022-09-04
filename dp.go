@@ -38,7 +38,7 @@ func watch(l *pq.Listener) {
 		case n := <-l.Notify:
 			var cfg RouteConfig
 			if err := json.Unmarshal([]byte(n.Extra), &cfg); err != nil {
-                log.Fatalf("notification invalid: %s err=%v", n.Extra, err)
+				log.Fatalf("notification invalid: %s err=%v", n.Extra, err)
 			}
 			if cfg.Revision <= startRev {
 				log.Println("Skip old route notification: ", n.Extra)
@@ -52,7 +52,9 @@ func watch(l *pq.Listener) {
 
 			mutex.Lock()
 
-			if !cfg.Tombstone {
+			tombstone := cfg.Tombstone
+
+			if !tombstone {
 				routeConfigs[cfg.Key] = cfg
 			} else {
 				cfg = routeConfigs[cfg.Key]
@@ -66,7 +68,7 @@ func watch(l *pq.Listener) {
 				log.Fatal(err)
 			}
 
-			if !cfg.Tombstone {
+			if !tombstone {
 				log.Printf("add route: %s\n", val)
 				routes[route.Uri] = route
 			} else {
@@ -153,26 +155,26 @@ func main() {
 		mutex.RUnlock()
 		if ok {
 			log.Printf("%s -> %s\n", route.Uri, route.Upstream)
-            req2, err := http.NewRequest("GET", route.Upstream + route.Uri, nil)
-            if err != nil {
-                for k, v := range req.Header {
-                    if _, ok := req2.Header[k]; !ok {
-                        req2.Header[k] = v
-                    }
-                }
-            }
-            client := &http.Client{}
-            res, err := client.Do(req2)
+			req2, err := http.NewRequest("GET", route.Upstream+route.Uri, nil)
+			if err != nil {
+				for k, v := range req.Header {
+					if _, ok := req2.Header[k]; !ok {
+						req2.Header[k] = v
+					}
+				}
+			}
+			client := &http.Client{}
+			res, err := client.Do(req2)
 			if err != nil {
 				log.Fatal(err)
 			}
 			body, err := io.ReadAll(res.Body)
 			res.Body.Close()
-            for k, v := range res.Header {
-                if _, ok := w.Header()[k]; !ok {
-                    w.Header()[k] = v
-                }
-            }
+			for k, v := range res.Header {
+				if _, ok := w.Header()[k]; !ok {
+					w.Header()[k] = v
+				}
+			}
 			w.WriteHeader(res.StatusCode)
 			fmt.Fprintf(w, string(body))
 		} else {
