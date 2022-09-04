@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,28 +19,12 @@ type Route struct {
 	Upstream string `json:"upstream"`
 }
 
-type PGJsonTimestamp time.Time
-
-func (j *PGJsonTimestamp) UnmarshalJSON(b []byte) error {
-	s := strings.Trim(string(b), "\"")
-	t, err := time.Parse("2006-01-02T15:04:05.000000", s)
-	if err != nil {
-		return err
-	}
-	*j = PGJsonTimestamp(t)
-	return nil
-}
-
-func (j PGJsonTimestamp) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Time(j))
-}
-
 type RouteConfig struct {
-	Key        string          `json:"key"`
-	Value      string          `json:"value"`
-	Revision   int64           `json:"revision"`
-	Tombstone  bool            `json:"tombstone"`
-	CreateTime PGJsonTimestamp `json:"create_time"`
+	Key        string `json:"key"`
+	Value      string `json:"value"`
+	Revision   int64  `json:"revision"`
+	Tombstone  bool   `json:"tombstone"`
+	CreateTime int64  `json:"create_time"`
 }
 
 var mutex sync.RWMutex
@@ -53,10 +36,9 @@ func watch(l *pq.Listener) {
 	for {
 		select {
 		case n := <-l.Notify:
-			log.Println(n.Extra)
 			var cfg RouteConfig
 			if err := json.Unmarshal([]byte(n.Extra), &cfg); err != nil {
-				log.Fatal(err)
+                log.Fatalf("notification invalid: %s err=%v", n.Extra, err)
 			}
 			if cfg.Revision <= startRev {
 				log.Println("Skip old route notification: ", n.Extra)
@@ -64,8 +46,7 @@ func watch(l *pq.Listener) {
 			}
 
 			now := time.Now().UnixMilli()
-			createTime := time.Time(cfg.CreateTime).UnixMilli()
-			watch_delay := now - createTime
+			watch_delay := now - cfg.CreateTime
 			log.Printf("receive route notification: channel=%s, watch_delay=%d milliseconds: route: %s\n",
 				n.Channel, watch_delay, n.Extra)
 
@@ -172,12 +153,26 @@ func main() {
 		mutex.RUnlock()
 		if ok {
 			log.Printf("%s -> %s\n", route.Uri, route.Upstream)
-			res, err := http.Get(route.Upstream + route.Uri)
+            req2, err := http.NewRequest("GET", route.Upstream + route.Uri, nil)
+            if err != nil {
+                for k, v := range req.Header {
+                    if _, ok := req2.Header[k]; !ok {
+                        req2.Header[k] = v
+                    }
+                }
+            }
+            client := &http.Client{}
+            res, err := client.Do(req2)
 			if err != nil {
 				log.Fatal(err)
 			}
 			body, err := io.ReadAll(res.Body)
 			res.Body.Close()
+            for k, v := range res.Header {
+                if _, ok := w.Header()[k]; !ok {
+                    w.Header()[k] = v
+                }
+            }
 			w.WriteHeader(res.StatusCode)
 			fmt.Fprintf(w, string(body))
 		} else {

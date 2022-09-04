@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -79,13 +78,13 @@ func main() {
 			row := db.QueryRow(sql)
 			var key string
 			var value string
-			var create_time time.Time
+			var create_time int64
 			err := row.Scan(&rev, &key, &value, &create_time)
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Fprintf(w, "rev=%d, key=%s, value=%s, create_time=%s\n",
-				rev, key, value, create_time.Format("2006-01-02 15:04:05.000000"))
+			fmt.Fprintf(w, "rev=%d, key=%s, value=%s, create_time=%d\n",
+				rev, key, value, create_time)
 		} else {
 			w.WriteHeader(405)
 			fmt.Fprintln(w, "method not allowed")

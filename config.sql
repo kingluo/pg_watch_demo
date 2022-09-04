@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS config (
 	value text,
 	revision bigserial,
 	tombstone boolean NOT NULL DEFAULT false,
-	create_time timestamp NOT NULL DEFAULT NOW(),
+	create_time bigint NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::bigint,
 	primary key(key, revision)
 );
 
@@ -13,11 +13,11 @@ drop function if exists get;
 drop function if exists set;
 drop function if exists del;
 drop function if exists get_all;
-drop trigger notify_config_change on config;
+drop trigger if exists notify_config_change on config;
 drop function if exists notify_config_change;
 
 CREATE FUNCTION get(kk text, rev bigint default 0)
-RETURNS table(r bigint, k text, v text, c timestamp) AS $$
+RETURNS table(r bigint, k text, v text, c bigint) AS $$
 BEGIN
 	return query with c as (
 		SELECT DISTINCT ON (key)
@@ -38,7 +38,7 @@ CREATE FUNCTION del(k text) RETURNS bigint AS $$
 $$ LANGUAGE SQL;
 
 CREATE FUNCTION get_all(prefix text, rev bigint default 0)
-RETURNS table(r bigint, k text, v text, c timestamp) AS $$
+RETURNS table(r bigint, k text, v text, c bigint) AS $$
 declare
 	v_prefix text = prefix || '%';
 BEGIN
