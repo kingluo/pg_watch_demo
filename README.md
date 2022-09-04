@@ -4,10 +4,12 @@ With trigger and notify, you could re-implement an complete (even better) etcd w
 
 It mimics below etcd features:
 
-* watch
+* watch (*)
 * read value in historical data, i.e. get key by revision
 * del key
 * compact, either by revision or date retention
+
+*\* You could watch specific resources by prefix (e.g. `routes`, `upstreams`, etc.), just like what etcd does.*
 
 ## Demo
 
