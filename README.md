@@ -195,7 +195,7 @@ no route
 ## compact
 
 ```sql
--- delete items older before revision 7
+-- delete items older than revision 7
 delete from config where revision < 7;
 
 -- delete items older than specific date
