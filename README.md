@@ -27,7 +27,7 @@ git clone https://github.com/kingluo/pg_watch_demo
 cd pg_watch_demo
 
 mkdir /opt/pg_data1
-docker run -d --rm --name postgres -p 5432:5432 -v /opt/pg_data1:/var/lib/postgresql/data -e POSTGRES_PASSWORD=postgres -e POSTGRES_HOST_AUTH_METHOD=md5 -d postgres:14
+docker run -d --rm --name postgres -p 5432:5432 -v /opt/pg_data1:/var/lib/postgresql/data -e POSTGRES_PASSWORD=postgres -e POSTGRES_HOST_AUTH_METHOD=md5 postgres:14
 
 docker cp ./config.sql postgres:/tmp/
 docker exec postgres psql -h localhost -d postgres -U postgres -q -f /tmp/config.sql
