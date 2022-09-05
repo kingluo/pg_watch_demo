@@ -202,3 +202,45 @@ delete from config where revision < 7;
 -- delete items older than specific date
 delete from config where create_time < (EXTRACT(EPOCH FROM TIMESTAMP '2011-05-17 10:40:28.876944') * 1000)::bigint;
 ```
+
+## incremental watch even after reconnected
+
+Simulate disconnect and reconnect via iptables:
+
+```bash
+# disconnect
+iptables -I INPUT -p tcp --dport 5432 -m state --state NEW,RELATED,ESTABLISHED -j REJECT --reject-with tcp-reset
+
+# reconnect
+iptables -D INPUT -p tcp --dport 5432 -m state --state NEW,RELATED,ESTABLISHED -j REJECT --reject-with tcp-reset
+```
+
+```bash
+
+# dp logs
+
+2022/09/05 20:16:50 get all routes...
+2022/09/05 20:16:50 Start watching...
+2022/09/05 20:16:50 Start Data Plane, listen :9080
+2022/09/05 20:17:03 receive route notification: channel=routes, watch_delay=6 milliseconds: route: {"key":"/routes/foo","value":"eyJ1cmkiOiIvZ2V0IiwidXBzdHJlYW0iOiJodHR
+wOi8vaHR0cGJpbi5vcmcifQ==","revision":27,"tombstone":false,"create_time":1662380223969}
+2022/09/05 20:17:03 {Key:/routes/foo Value:eyJ1cmkiOiIvZ2V0IiwidXBzdHJlYW0iOiJodHRwOi8vaHR0cGJpbi5vcmcifQ== Revision:27 Tombstone:false CreateTime:1662380223969}
+2022/09/05 20:17:03 add route: {"uri":"/get","upstream":"http://httpbin.org"}
+2022/09/05 20:17:18 Received no events for 15 seconds, checking connection
+2022/09/05 20:17:18 listener ping error:  read tcp 127.0.0.1:54418->127.0.0.1:5432: read: connection reset by peer
+2022/09/05 20:17:18 read tcp 127.0.0.1:54418->127.0.0.1:5432: read: connection reset by peer
+2022/09/05 20:17:18 dial tcp 127.0.0.1:5432: connect: connection refused
+2022/09/05 20:17:21 dial tcp 127.0.0.1:5432: connect: connection refused
+2022/09/05 20:17:27 dial tcp 127.0.0.1:5432: connect: connection refused
+2022/09/05 20:17:33 Received no events for 15 seconds, checking connection
+2022/09/05 20:17:33 listener ping error:  no connection
+2022/09/05 20:17:37 listener reconnected
+2022/09/05 20:17:37 get all routes from rev 27 including tombstones...
+2022/09/05 20:17:38 {Key:/routes/foo Value: Revision:28 Tombstone:true CreateTime:1662380243201}
+2022/09/05 20:17:38 del route: {"uri":"/get","upstream":"http://httpbin.org"}
+2022/09/05 20:17:52 receive route notification: channel=routes, watch_delay=5 milliseconds: route: {"key":"/routes/bar","value":"eyJ1cmkiOiIvYW55dGhpbmciLCJ1cHN0cmVhbSI
+6Imh0dHA6Ly9odHRwYmluLm9yZyJ9","revision":29,"tombstone":false,"create_time":1662380272657}
+2022/09/05 20:17:52 {Key:/routes/bar Value:eyJ1cmkiOiIvYW55dGhpbmciLCJ1cHN0cmVhbSI6Imh0dHA6Ly9odHRwYmluLm9yZyJ9 Revision:29 Tombstone:false CreateTime:1662380272657}
+2022/09/05 20:17:52 add route: {"uri":"/anything","upstream":"http://httpbin.org"}
+
+```
