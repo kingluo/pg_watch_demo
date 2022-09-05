@@ -84,19 +84,20 @@ func watch(l *pq.Listener) {
 
 				for rows.Next() {
 					var cfg RouteConfig
-                    var val sql.NullString
+					var val sql.NullString
 					err = rows.Scan(&cfg.Revision, &cfg.Key, &val, &cfg.CreateTime, &cfg.Tombstone)
 					if err != nil {
 						panic(err)
 					}
-                    if val.Valid {
-                        cfg.Value = val.String
-                    }
+					if val.Valid {
+						cfg.Value = val.String
+					}
 					updateRoute(cfg)
 				}
 				rows.Close()
-                continue
+				continue
 			}
+
 			var cfg RouteConfig
 			if err := json.Unmarshal([]byte(n.Extra), &cfg); err != nil {
 				log.Fatalf("notification invalid: %s err=%v", n.Extra, err)
@@ -114,11 +115,11 @@ func watch(l *pq.Listener) {
 			updateRoute(cfg)
 		case <-time.After(15 * time.Second):
 			log.Println("Received no events for 15 seconds, checking connection")
-			//go func() {
-			if err := l.Ping(); err != nil {
-				log.Println("listener ping error: ", err)
-			}
-			//}()
+			go func() {
+				if err := l.Ping(); err != nil {
+					log.Println("listener ping error: ", err)
+				}
+			}()
 		}
 	}
 }
