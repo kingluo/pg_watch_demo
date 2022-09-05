@@ -27,20 +27,81 @@ type RouteConfig struct {
 	CreateTime int64  `json:"create_time"`
 }
 
+var db *sql.DB
 var mutex sync.RWMutex
 var routeConfigs = make(map[string]RouteConfig)
 var routes = make(map[string]Route)
-var startRev int64 = 0
+var latestRev int64 = 0
+
+func updateRoute(cfg RouteConfig) {
+	log.Printf("%+v\n", cfg)
+
+	mutex.Lock()
+
+	if cfg.Revision > latestRev {
+		latestRev = cfg.Revision
+	}
+
+	tombstone := cfg.Tombstone
+
+	if !tombstone {
+		routeConfigs[cfg.Key] = cfg
+	} else {
+		cfg = routeConfigs[cfg.Key]
+	}
+	val, err := b64.StdEncoding.DecodeString(cfg.Value)
+	if err != nil {
+		panic(err)
+	}
+	var route Route
+	if err := json.Unmarshal([]byte(val), &route); err != nil {
+		log.Fatal(err)
+	}
+
+	if !tombstone {
+		log.Printf("add route: %s\n", val)
+		routes[route.Uri] = route
+	} else {
+		log.Printf("del route: %s\n", val)
+		delete(routes, route.Uri)
+	}
+
+	mutex.Unlock()
+}
 
 func watch(l *pq.Listener) {
 	for {
 		select {
 		case n := <-l.Notify:
+			if n == nil {
+				log.Println("listener reconnected")
+				log.Printf("get all routes from rev %d including tombstones...\n", latestRev)
+				str := fmt.Sprintf(`select * from get_all_from_rev_with_stale('/routes/', %d)`, latestRev)
+				rows, err := db.Query(str)
+				if err != nil {
+					panic(err)
+				}
+
+				for rows.Next() {
+					var cfg RouteConfig
+                    var val sql.NullString
+					err = rows.Scan(&cfg.Revision, &cfg.Key, &val, &cfg.CreateTime, &cfg.Tombstone)
+					if err != nil {
+						panic(err)
+					}
+                    if val.Valid {
+                        cfg.Value = val.String
+                    }
+					updateRoute(cfg)
+				}
+				rows.Close()
+                continue
+			}
 			var cfg RouteConfig
 			if err := json.Unmarshal([]byte(n.Extra), &cfg); err != nil {
 				log.Fatalf("notification invalid: %s err=%v", n.Extra, err)
 			}
-			if cfg.Revision <= startRev {
+			if cfg.Revision <= latestRev {
 				log.Println("Skip old route notification: ", n.Extra)
 				continue
 			}
@@ -50,47 +111,22 @@ func watch(l *pq.Listener) {
 			log.Printf("receive route notification: channel=%s, watch_delay=%d milliseconds: route: %s\n",
 				n.Channel, watch_delay, n.Extra)
 
-			mutex.Lock()
-
-			tombstone := cfg.Tombstone
-
-			if !tombstone {
-				routeConfigs[cfg.Key] = cfg
-			} else {
-				cfg = routeConfigs[cfg.Key]
+			updateRoute(cfg)
+		case <-time.After(15 * time.Second):
+			log.Println("Received no events for 15 seconds, checking connection")
+			//go func() {
+			if err := l.Ping(); err != nil {
+				log.Println("listener ping error: ", err)
 			}
-			val, err := b64.StdEncoding.DecodeString(cfg.Value)
-			if err != nil {
-				panic(err)
-			}
-			var route Route
-			if err := json.Unmarshal([]byte(val), &route); err != nil {
-				log.Fatal(err)
-			}
-
-			if !tombstone {
-				log.Printf("add route: %s\n", val)
-				routes[route.Uri] = route
-			} else {
-				log.Printf("del route: %s\n", val)
-				delete(routes, route.Uri)
-			}
-
-			mutex.Unlock()
-		case <-time.After(90 * time.Second):
-			log.Println("Received no events for 90 seconds, checking connection")
-			go func() {
-				if err := l.Ping(); err != nil {
-					log.Println("listener ping error: ", err)
-				}
-			}()
+			//}()
 		}
 	}
 }
 
 func main() {
-	conninfo := "user=postgres password=postgres host=127.0.0.1 sslmode=disable"
-	db, err := sql.Open("postgres", conninfo)
+	conninfo := "user=postgres password=postgres host=127.0.0.1 connect_timeout=5 sslmode=disable"
+	var err error
+	db, err = sql.Open("postgres", conninfo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -108,7 +144,7 @@ func main() {
 		}
 	}
 
-	listener := pq.NewListener(conninfo, 10*time.Second, time.Minute, reportProblem)
+	listener := pq.NewListener(conninfo, 3*time.Second, 10*time.Second, reportProblem)
 	err = listener.Listen("routes")
 	if err != nil {
 		panic(err)
@@ -126,21 +162,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if cfg.Revision > startRev {
-			startRev = cfg.Revision
-		}
-		routeConfigs[cfg.Key] = cfg
-
-		val, err := b64.StdEncoding.DecodeString(cfg.Value)
-		if err != nil {
-			panic(err)
-		}
-		var route Route
-		if err := json.Unmarshal([]byte(val), &route); err != nil {
-			log.Fatal(err)
-		}
-		log.Println(route)
-		routes[route.Uri] = route
+		updateRoute(cfg)
 	}
 	rows.Close()
 

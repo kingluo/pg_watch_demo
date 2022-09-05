@@ -13,6 +13,7 @@ drop function if exists get;
 drop function if exists set;
 drop function if exists del;
 drop function if exists get_all;
+drop function if exists get_all_from_rev_with_stale;
 drop trigger if exists notify_config_change on config;
 drop function if exists notify_config_change;
 
@@ -37,8 +38,23 @@ CREATE FUNCTION del(k text) RETURNS bigint AS $$
 	insert into config(key, tombstone) values(k, true) returning revision;
 $$ LANGUAGE SQL;
 
-CREATE FUNCTION get_all(prefix text, rev bigint default 0)
+CREATE FUNCTION get_all(prefix text)
 RETURNS table(r bigint, k text, v text, c bigint) AS $$
+declare
+	v_prefix text = prefix || '%';
+BEGIN
+	return query with c as (
+		SELECT DISTINCT ON (key)
+			   revision, key, value, create_time, tombstone
+		FROM config
+		where key like v_prefix
+		ORDER BY key, revision DESC
+	) select revision, key, value, create_time from c where tombstone = false;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION get_all_from_rev_with_stale(prefix text, rev bigint)
+RETURNS table(r bigint, k text, v text, c bigint, tomb boolean) AS $$
 declare
 	v_prefix text = prefix || '%';
 BEGIN
@@ -48,7 +64,7 @@ BEGIN
 		FROM config
 		where key like v_prefix and revision > rev
 		ORDER BY key, revision DESC
-	) select revision, key, value, create_time from c where tombstone = false;
+	) select revision, key, value, create_time, tombstone from c;
 END;
 $$ LANGUAGE plpgsql;
 
