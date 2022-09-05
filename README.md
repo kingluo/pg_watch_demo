@@ -6,6 +6,7 @@ It mimics below etcd features:
 
 * watch (*)
 * read value in historical data, i.e. get key by revision
+* set key
 * del key
 * compact, either by revision or date retention
 
