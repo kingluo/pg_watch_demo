@@ -201,6 +201,15 @@ delete from config where revision < 7;
 
 -- delete items older than specific date
 delete from config where create_time < (EXTRACT(EPOCH FROM TIMESTAMP '2011-05-17 10:40:28.876944') * 1000)::bigint;
+
+-- retain only latest revision of all alive keys
+with alive as (
+	select r as revision from get_all('/routes/')
+)
+delete from config
+where not exists (
+    select 1 from alive where alive.revision = config.revision limit 1
+);
 ```
 
 ## incremental watch even after reconnected
@@ -213,15 +222,6 @@ iptables -I INPUT -p tcp --dport 5432 -m state --state NEW,RELATED,ESTABLISHED -
 
 # reconnect
 iptables -D INPUT -p tcp --dport 5432 -m state --state NEW,RELATED,ESTABLISHED -j REJECT --reject-with tcp-reset
-
-# retain only latest revision of all alive keys
-with alive as (
-	select r as revision from get_all('/routes/')
-)
-delete from config
-where not exists (
-    select 1 from alive where alive.revision = config.revision limit 1
-);
 ```
 
 ```bash
