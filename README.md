@@ -213,6 +213,15 @@ iptables -I INPUT -p tcp --dport 5432 -m state --state NEW,RELATED,ESTABLISHED -
 
 # reconnect
 iptables -D INPUT -p tcp --dport 5432 -m state --state NEW,RELATED,ESTABLISHED -j REJECT --reject-with tcp-reset
+
+# retain only latest revision of all alive keys
+with alive as (
+	select r as revision from get_all('/routes/')
+)
+delete from config
+where not exists (
+    select 1 from alive where alive.revision = config.revision limit 1
+);
 ```
 
 ```bash
