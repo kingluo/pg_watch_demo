@@ -24,7 +24,6 @@ type RouteConfig struct {
 	Value      string `json:"value"`
 	Revision   int64  `json:"revision"`
 	Tombstone  bool   `json:"tombstone"`
-	CreateTime int64  `json:"create_time"`
 }
 
 var db *sql.DB
@@ -85,7 +84,7 @@ func watch(l *pq.Listener) {
 				for rows.Next() {
 					var cfg RouteConfig
 					var val sql.NullString
-					err = rows.Scan(&cfg.Revision, &cfg.Key, &val, &cfg.CreateTime, &cfg.Tombstone)
+					err = rows.Scan(&cfg.Revision, &cfg.Key, &val, &cfg.Tombstone)
 					if err != nil {
 						panic(err)
 					}
@@ -107,10 +106,8 @@ func watch(l *pq.Listener) {
 				continue
 			}
 
-			now := time.Now().UnixMilli()
-			watch_delay := now - cfg.CreateTime
-			log.Printf("receive route notification: channel=%s, watch_delay=%d milliseconds: route: %s\n",
-				n.Channel, watch_delay, n.Extra)
+			log.Printf("receive route notification: channel=%s: route: %s\n",
+				n.Channel, n.Extra)
 
 			updateRoute(cfg)
 		case <-time.After(15 * time.Second):
@@ -159,7 +156,7 @@ func main() {
 
 	for rows.Next() {
 		var cfg RouteConfig
-		err = rows.Scan(&cfg.Revision, &cfg.Key, &cfg.Value, &cfg.CreateTime)
+		err = rows.Scan(&cfg.Revision, &cfg.Key, &cfg.Value)
 		if err != nil {
 			panic(err)
 		}

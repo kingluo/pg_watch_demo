@@ -73,13 +73,12 @@ func main() {
 			row := db.QueryRow(sql)
 			var key string
 			var value string
-			var create_time int64
-			err := row.Scan(&rev, &key, &value, &create_time)
+			err := row.Scan(&rev, &key, &value)
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Fprintf(w, "rev=%d, key=%s, value=%s, create_time=%d\n",
-				rev, key, value, create_time)
+			fmt.Fprintf(w, "rev=%d, key=%s, value=%s\n",
+				rev, key, value)
 		} else {
 			w.WriteHeader(405)
 			fmt.Fprintln(w, "method not allowed")
