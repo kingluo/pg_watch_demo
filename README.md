@@ -256,6 +256,8 @@ wOi8vaHR0cGJpbi5vcmcifQ==","revision":27,"tombstone":false,"create_time":1662380
 
 ## benchmark
 
+[benchmark.go](benchmark.go)
+
 ```bash
 docker run -d --rm --name postgres -p 5432:5432 \
 -e POSTGRES_PASSWORD=postgres -e POSTGRES_HOST_AUTH_METHOD=md5 \
