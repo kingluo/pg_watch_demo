@@ -253,3 +253,35 @@ wOi8vaHR0cGJpbi5vcmcifQ==","revision":27,"tombstone":false,"create_time":1662380
 2022/09/05 20:17:52 add route: {"uri":"/anything","upstream":"http://httpbin.org"}
 
 ```
+
+## benchmark
+
+```bash
+docker run -d --rm --name postgres -p 5432:5432 \
+-e POSTGRES_PASSWORD=postgres -e POSTGRES_HOST_AUTH_METHOD=md5 \
+postgres:15
+
+docker run -d --rm --name etcd -p 2379:2379 \
+-e ALLOW_NONE_AUTHENTICATION=yes \
+bitnami/etcd:latest
+
+nsenter -n -t $(docker inspect -f '{{.State.Pid}}' etcd) go run benchmark.go -c 1 -watch
+
+nsenter -n -t $(docker inspect -f '{{.State.Pid}}' postgres) \
+go run benchmark.go -db postgres -url "user=postgres password=postgres 
+host=127.0.0.1 connect_timeout=5 sslmode=disable" -c 1 -watch
+```
+
+![etcd_vs_postgres](etcd_vs_postgres.png)
+
+They have almost the same IO performance, and postgresql is even a bit better.
+
+They have the same watch delay (i.e. delay between the data updated and watch event delivery),
+smaller than 1 millisecond when the client and the server are on the same host.
+
+But it's worth noting that postgresql has below shortages:
+
+* WAL disk-write IO is double than etcd, even with `wal_level=minimal` and `full_page_writes=off`
+* CPU is higher than etcd
+* `pg_notify` holds an exclusive channel lock, which means the transactions using the same channel blocks each other,
+i.e. watch suppresses concurrent put! We need a more efficient watch implementation.
