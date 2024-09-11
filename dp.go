@@ -133,6 +133,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	_, err = db.Exec("select pg_advisory_lock_shared(9080)")
+	if err != nil {
+		panic(err)
+	}
+
 	// listen first
 	// if listen happens after get_all, then it's possible to
 	// lost new routes between get_all and listen.
